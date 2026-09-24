@@ -263,6 +263,11 @@ class Store {
     return fail(error,data as AuditLog);
   }
 
+  async getAuditEventById(resourceId: string): Promise<AuditLog | undefined> {
+    const { data, error } = await getSupabaseAdmin().from('audit_logs').select('*').eq('resource_type','billing').eq('resource_id',resourceId).maybeSingle();
+    return fail(error, data as AuditLog | undefined);
+  }
+
   async getSystemMetrics() {
     const admin = getSupabaseAdmin();
     const [u,c,t,r,s,sub] = await Promise.all([
