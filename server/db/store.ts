@@ -147,7 +147,10 @@ class Store {
         masked_preview: maskSecret(rawSecret), created_at: now(), updated_at: now()
       };
       const { error: credError } = await getSupabaseAdmin().from('connection_credentials').insert(credential);
-      if (credError) throw new Error(credError.message);
+      if (credError) {
+        await getSupabaseAdmin().from('connections').delete().eq('id', connection.id).eq('user_id', connection.user_id);
+        throw new Error(credError.message);
+      }
     }
     return { connection: data as Connection, credential };
   }
@@ -201,7 +204,8 @@ class Store {
       id: id('tv'), transformation_id: current.id, version_num: current.version,
       snapshot: current as any, created_at: now()
     };
-    await getSupabaseAdmin().from('transformation_versions').insert(snapshot);
+    const { error: snapshotError } = await getSupabaseAdmin().from('transformation_versions').insert(snapshot);
+    if (snapshotError) throw new Error(snapshotError.message);
     const { data, error } = await getSupabaseAdmin().from('transformations').update({ ...updates, version: current.version + 1, updated_at: now() }).eq('id', transformationId).eq('user_id', userId).select('*').maybeSingle();
     return fail(error, data as Transformation | undefined);
   }
