@@ -97,10 +97,22 @@ export class BillingEngine {
         if (metadataUserId) {
           const current = await db.getSubscriptionByUserId(metadataUserId);
           if (current) {
-            const active = event.type === 'customer.subscription.updated' && ['active','trialing'].includes(subscription.status);
+            const statusMap: Record<string, 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete' | 'expired'> = {
+              active: 'active',
+              trialing: 'trialing',
+              past_due: 'past_due',
+              unpaid: 'past_due',
+              incomplete: 'incomplete',
+              incomplete_expired: 'expired',
+              canceled: 'canceled',
+              paused: 'canceled'
+            };
+            const mappedStatus = event.type === 'customer.subscription.deleted'
+              ? 'canceled'
+              : (statusMap[subscription.status] || 'past_due');
             await db.setSubscription({
               ...current,
-              status: active ? 'active' : 'canceled',
+              status: mappedStatus,
               provider:'stripe',
               provider_subscription_id:subscription.id,
               provider_customer_id:typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id,
