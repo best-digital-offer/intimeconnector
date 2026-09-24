@@ -16,6 +16,10 @@ export async function createApp() {
   const allowedOrigins = (process.env.APP_BASE_URL || '')
     .split(',')
     .map((v) => v.trim())
+    .filter(Boolean)
+    .map((v) => {
+      try { return new URL(v).origin; } catch { return ''; }
+    })
     .filter(Boolean);
 
   app.set('trust proxy', 1);
@@ -41,7 +45,8 @@ export async function createApp() {
   app.use(cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (!isProduction && allowedOrigins.length === 0) return callback(null, true);
       return callback(new Error('CORS origin denied'));
     },
     credentials: true,
