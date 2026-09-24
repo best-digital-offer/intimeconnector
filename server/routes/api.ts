@@ -58,6 +58,7 @@ apiRouter.post('/auth/login', async (req,res) => {
 });
 
 apiRouter.get('/auth/me', requireAuth, async (req: AuthenticatedRequest,res) => {
+  if (!(await requireApiKeyScope(req, res, 'profile:read'))) return;
   const user=req.user!;
   const sub=await db.getSubscriptionByUserId(user.id);
   const plan=sub ? await db.getPlanById(sub.plan_id) : await db.getPlanById('plan_free');
