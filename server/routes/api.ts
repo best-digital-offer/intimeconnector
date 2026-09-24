@@ -105,8 +105,10 @@ apiRouter.post('/connections', requireAuth, async (req:AuthenticatedRequest,res)
   if(plan && current.length>=plan.connections_limit) return res.status(403).json({error:'Connection limit reached for your plan.'});
   const ssrf=await validateTargetUrl(endpoint_url);
   if(!ssrf.isValid) return res.status(400).json({error:`Security check failed: ${ssrf.reason}`});
+  if (!rawHeaders || typeof rawHeaders !== 'object' || Array.isArray(rawHeaders)) return res.status(400).json({error:'Headers must be an object.'});
+  if (!query_params || typeof query_params !== 'object' || Array.isArray(query_params)) return res.status(400).json({error:'Query parameters must be an object.'});
   const connection={
-    id:`conn_${crypto.randomBytes(8).toString('hex')}`,user_id:req.user!.id,name:String(name).trim(),
+    id:`conn_${crypto.randomBytes(8).toString('hex')}`,user_id:req.user!.id,name:String(name).trim().slice(0,100),
     description:String(description).trim(),endpoint_url:String(endpoint_url).trim(),http_method,auth_type,
     headers,query_params,timeout_ms:Math.min(Math.max(Number(timeout_ms)||8000,1000),15000),
     retry_count:Math.min(Math.max(Number(retry_count)||0,0),3),status:'active',created_at:new Date().toISOString(),updated_at:new Date().toISOString()
@@ -133,10 +135,13 @@ apiRouter.patch('/connections/:id', requireAuth, async (req:AuthenticatedRequest
     const ssrf=await validateTargetUrl(String(updates.endpoint_url));
     if(!ssrf.isValid)return res.status(400).json({error:`Security check failed: ${ssrf.reason}`});
   }
-  if (updates.headers) {
-    const source = updates.headers && typeof updates.headers === 'object' ? updates.headers as Record<string, unknown> : {};
+  if (updates.headers !== undefined) {
+    if (!updates.headers || typeof updates.headers !== 'object' || Array.isArray(updates.headers)) return res.status(400).json({error:'Headers must be an object.'});
+    const source = updates.headers as Record<string, unknown>;
     updates.headers = Object.fromEntries(Object.entries(source).filter(([key]) => !['authorization','proxy-authorization','cookie','set-cookie','host','content-length'].includes(key.toLowerCase())));
   }
+  if (updates.query_params !== undefined && (!updates.query_params || typeof updates.query_params !== 'object' || Array.isArray(updates.query_params))) return res.status(400).json({error:'Query parameters must be an object.'});
+  if (updates.name !== undefined && !String(updates.name).trim()) return res.status(400).json({error:'Connection name cannot be empty.'});
   if (updates.timeout_ms !== undefined) updates.timeout_ms = Math.min(Math.max(Number(updates.timeout_ms) || 8000, 1000), 15000);
   if (updates.retry_count !== undefined) updates.retry_count = Math.min(Math.max(Number(updates.retry_count) || 0, 0), 3);
   if (updates.status && !['active','paused','error'].includes(String(updates.status))) return res.status(400).json({error:'Unsupported connection status.'});
