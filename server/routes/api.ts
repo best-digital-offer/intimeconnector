@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import crypto from 'node:crypto';
 import { requireAdmin, requireAuth, type AuthenticatedRequest } from '../security/auth.js';
 import { db } from '../db/store.js';
-import { generateApiKey } from '../security/crypto.js';
+import { generateApiKey, hashToken } from '../security/crypto.js';
 import { checkRateLimit } from '../security/rateLimiter.js';
 import { validateTargetUrl } from '../security/ssrf.js';
 import { executeExternalRequest } from '../services/requestEngine.js';
@@ -16,7 +16,7 @@ function clientIp(req: Request) { return req.ip || ''; }
 async function requireApiKeyScope(req: AuthenticatedRequest, res: Response, scope: string) {
   const token = req.accessToken || '';
   if (!token.startsWith('jtc_live_')) return true;
-  const key = await db.getApiKeyByHash((await import('../security/crypto.js')).hashToken(token));
+  const key = await db.getApiKeyByHash(hashToken(token));
   if (!key || !Array.isArray(key.scopes) || !key.scopes.includes(scope)) {
     res.status(403).json({ error: 'API key scope does not permit this operation.' });
     return false;
@@ -76,7 +76,8 @@ apiRouter.delete('/profile', requireAuth, async (req:AuthenticatedRequest,res) =
   try {
     const sub = await db.getSubscriptionByUserId(req.user!.id);
     if (sub?.provider === 'stripe' && sub.provider_subscription_id) {
-      await billingEngine.cancelSubscription(req.user!.id).catch(() => undefined);
+      const cancelled = await billingEngine.cancelSubscription(req.user!.id);
+      if (!cancelled) return res.status(409).json({error:'Subscription cancellation must complete before account deletion.'});
     }
     await db.deleteProfile(req.user!.id);
     res.json({success:true});
