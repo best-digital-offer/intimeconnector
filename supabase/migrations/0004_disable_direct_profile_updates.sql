@@ -1,0 +1,1 @@
+-- Prevent clients using the Supabase anon/authenticated key from changing profile role/email directly.\n-- Server-side profile updates use the service-role client and are restricted by API handlers.\ndrop policy if exists profiles_self_update on public.profiles;\n
