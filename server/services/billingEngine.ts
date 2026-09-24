@@ -76,8 +76,17 @@ export class BillingEngine {
           const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
           const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
           const current = await db.getSubscriptionByUserId(userId);
-          const periodStart = new Date().toISOString();
-          const periodEnd = new Date(Date.now()+30*24*3600*1000).toISOString();
+          let periodStart = new Date().toISOString();
+          let periodEnd = new Date(Date.now()+30*24*3600*1000).toISOString();
+          if (subId) {
+            try {
+              const stripeSubscription = await client.subscriptions.retrieve(subId);
+              if (stripeSubscription.current_period_start) periodStart = new Date(stripeSubscription.current_period_start * 1000).toISOString();
+              if (stripeSubscription.current_period_end) periodEnd = new Date(stripeSubscription.current_period_end * 1000).toISOString();
+            } catch {
+              // Safe fallback if the subscription cannot be retrieved yet.
+            }
+          }
           await db.setSubscription({
             id: current?.id || `sub_${event.id}`,
             user_id:userId, plan_id:planId, status:'active',
