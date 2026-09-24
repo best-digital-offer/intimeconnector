@@ -3,7 +3,6 @@ export type UserRole = 'user' | 'admin';
 export interface Profile {
   id: string;
   email: string;
-  password_hash: string;
   name: string;
   role: UserRole;
   created_at: string;
@@ -21,17 +20,20 @@ export interface Plan {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  stripe_price_id?: string;
+  usage_count_mode?: 'attempted' | 'successful';
 }
 
 export interface Subscription {
   id: string;
   user_id: string;
   plan_id: string;
-  status: 'active' | 'canceled' | 'past_due' | 'trialing';
-  current_period_start: string;
-  current_period_end: string;
+  status: 'active' | 'canceled' | 'past_due' | 'trialing' | 'incomplete' | 'expired';
+  current_period_start?: string;
+  current_period_end?: string;
   cancel_at_period_end: boolean;
-  provider: 'stripe' | 'razorpay' | 'paypal' | 'paddle' | 'manual';
+  provider: string;
+  provider_customer_id?: string;
   provider_subscription_id?: string;
   created_at: string;
   updated_at: string;
@@ -63,31 +65,20 @@ export interface ConnectionCredential {
   id: string;
   connection_id: string;
   secret_type: AuthType;
-  encrypted_secret: string; // AES-256-GCM ciphertext hex
-  iv: string; // 12-byte initialization vector hex
-  auth_tag: string; // 16-byte authentication tag hex
-  masked_preview: string; // e.g. "sk_live_•••••••92AB"
+  encrypted_secret: string;
+  iv: string;
+  auth_tag: string;
+  masked_preview: string;
   created_at: string;
   updated_at: string;
   last_used_at?: string;
 }
 
 export type TransformationRuleType =
-  | 'rename_field'
-  | 'remove_field'
-  | 'create_field'
-  | 'constant_value'
-  | 'combine_fields'
-  | 'split_fields'
-  | 'trim_text'
-  | 'lowercase'
-  | 'uppercase'
-  | 'to_number'
-  | 'to_boolean'
-  | 'format_date'
-  | 'create_array'
-  | 'set_default'
-  | 'conditional';
+  | 'rename_field' | 'remove_field' | 'create_field' | 'constant_value'
+  | 'combine_fields' | 'split_fields' | 'trim_text' | 'lowercase'
+  | 'uppercase' | 'to_number' | 'to_boolean' | 'format_date'
+  | 'create_array' | 'set_default' | 'conditional';
 
 export interface TransformationRule {
   id: string;
@@ -124,7 +115,7 @@ export interface TransformationVersion {
   id: string;
   transformation_id: string;
   version_num: number;
-  snapshot: Omit<Transformation, 'id'>;
+  snapshot: Record<string, unknown>;
   created_at: string;
 }
 
@@ -141,8 +132,8 @@ export interface ExecutionRequest {
   duration_ms: number;
   endpoint_domain: string;
   endpoint_path: string;
-  masked_request_payload: string; // Sensitive fields redacted
-  safe_response_preview: string; // Truncated/redacted response preview
+  masked_request_payload: string;
+  safe_response_preview: string;
   error_message?: string;
   idempotency_key?: string;
   correlation_id: string;
@@ -180,35 +171,14 @@ export interface UsageEvent {
   created_at: string;
 }
 
-export interface OAuthClient {
-  id: string;
-  client_id: string;
-  client_secret_hash: string;
-  client_name: string;
-  redirect_uris: string[];
-  is_active: boolean;
-  created_at: string;
-}
-
-export interface OAuthToken {
-  id: string;
-  user_id: string;
-  client_id: string;
-  token_hash: string;
-  token_type: 'Bearer';
-  scopes: string[];
-  expires_at: string;
-  created_at: string;
-}
-
 export interface AuditLog {
   id: string;
-  user_id: string;
+  user_id?: string;
   action: string;
   resource_type: string;
   resource_id?: string;
   metadata: Record<string, unknown>;
-  ip_address: string;
+  ip_address?: string;
   created_at: string;
 }
 
@@ -217,10 +187,10 @@ export type SecuritySeverity = 'low' | 'medium' | 'high' | 'critical';
 export interface SecurityEvent {
   id: string;
   user_id?: string;
-  event_type: 'ssrf_blocked' | 'rate_limit_exceeded' | 'auth_failure' | 'invalid_token' | 'idor_attempt' | 'oversized_payload';
+  event_type: string;
   severity: SecuritySeverity;
   details: Record<string, unknown>;
-  ip_address: string;
+  ip_address?: string;
   blocked: boolean;
   created_at: string;
 }
@@ -229,44 +199,11 @@ export interface ApiKey {
   id: string;
   user_id: string;
   name: string;
-  key_prefix: string; // e.g. "jtc_live_a1b2"
+  key_prefix: string;
   key_hash: string;
   scopes: string[];
   last_used_at?: string;
   expires_at?: string;
   is_revoked: boolean;
   created_at: string;
-}
-
-export interface TeamMember {
-  id: string;
-  user_id: string;
-  team_id: string;
-  role: 'owner' | 'admin' | 'member';
-  created_at: string;
-}
-
-export interface SupportTicket {
-  id: string;
-  user_id: string;
-  subject: string;
-  message: string;
-  status: 'open' | 'in_progress' | 'resolved';
-  priority: 'low' | 'normal' | 'high';
-  created_at: string;
-}
-
-export interface AdminAction {
-  id: string;
-  admin_user_id: string;
-  action: string;
-  target_user_id?: string;
-  details: Record<string, unknown>;
-  created_at: string;
-}
-
-export interface SystemSettings {
-  key: string;
-  value: Record<string, unknown>;
-  updated_at: string;
 }
