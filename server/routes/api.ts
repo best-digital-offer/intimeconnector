@@ -223,9 +223,14 @@ apiRouter.post('/billing/cancel', requireAuth, async (req:AuthenticatedRequest,r
 
 apiRouter.get('/api-keys', requireAuth, async (req:AuthenticatedRequest,res)=>res.json({api_keys:(await db.getApiKeysByUserId(req.user!.id)).map(k=>({id:k.id,name:k.name,key_prefix:k.key_prefix,scopes:k.scopes,last_used_at:k.last_used_at,is_revoked:k.is_revoked,created_at:k.created_at}))}));
 apiRouter.post('/api-keys', requireAuth, async (req:AuthenticatedRequest,res)=>{
-  const {rawKey,keyPrefix,keyHash}=generateApiKey(); const key:any={id:`key_${crypto.randomBytes(8).toString('hex')}`,user_id:req.user!.id,name:String(req.body?.name||'API Key').trim(),key_prefix:keyPrefix,key_hash:keyHash,scopes:['connections:read','execute','profile:read'],is_revoked:false,created_at:new Date().toISOString()};
+  const {rawKey,keyPrefix,keyHash}=generateApiKey();
+  const requestedScopes=Array.isArray(req.body?.scopes) ? req.body.scopes.map((s:unknown)=>String(s)) : ['connections:read','execute','profile:read'];
+  const allowedScopes=['connections:read','execute','profile:read'];
+  if(requestedScopes.some((s:string)=>!allowedScopes.includes(s))) return res.status(400).json({error:'Invalid API key scope.'});
+  const {rawKey:keyRaw,keyPrefix:prefix,keyHash:hash}=generateApiKey();
+  const key:any={id:`key_${crypto.randomBytes(8).toString('hex')}`,user_id:req.user!.id,name:String(req.body?.name||'API Key').trim().slice(0,100),key_prefix:prefix,key_hash:hash,scopes:[...new Set(requestedScopes)],is_revoked:false,created_at:new Date().toISOString()};
   const created=await db.createApiKey(key); await db.logAudit({user_id:req.user!.id,action:'api_key.created',resource_type:'api_key',resource_id:key.id,metadata:{name:key.name,prefix:keyPrefix},ip_address:clientIp(req)});
-  res.status(201).json({api_key:{id:created.id,name:created.name,raw_key:rawKey,key_prefix:keyPrefix,scopes:created.scopes,created_at:created.created_at}});
+  res.status(201).json({api_key:{id:created.id,name:created.name,raw_key:keyRaw,key_prefix:prefix,scopes:created.scopes,created_at:created.created_at}});
 });
 apiRouter.delete('/api-keys/:id', requireAuth, async (req:AuthenticatedRequest,res)=>{if(!await db.revokeApiKey(req.params.id,req.user!.id))return res.status(404).json({error:'API key not found.'});res.json({success:true});});
 
