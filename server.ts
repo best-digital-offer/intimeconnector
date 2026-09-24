@@ -3,8 +3,8 @@ import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { apiRouter, handleOpenAiAppsChallenge } from './server/routes/api';
-import { handleMcpRequest } from './server/services/mcpService';
+import { apiRouter, handleOpenAiAppsChallenge } from './server/routes/api.js';
+import { handleMcpRequest } from './server/services/mcpService.js';
 
 dotenv.config();
 
