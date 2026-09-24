@@ -108,6 +108,11 @@ class Store {
       actions_count: 0, actions_limit: plan?.actions_limit || 25, updated_at: now()
     };
     const { data: created, error: createError } = await getSupabaseAdmin().from('usage').insert(record).select('*').single();
+    if (!createError) return created as Usage;
+    if (createError.code === '23505') {
+      const { data: existing, error: retryError } = await getSupabaseAdmin().from('usage').select('*').eq('user_id', userId).order('period_start', { ascending: false }).limit(1).maybeSingle();
+      return fail(retryError, existing as Usage);
+    }
     return fail(createError, created as Usage);
   }
 
