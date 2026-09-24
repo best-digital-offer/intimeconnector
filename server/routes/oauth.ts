@@ -53,6 +53,7 @@ oauthRouter.get('/oauth/authorize', async (req,res) => {
 
 oauthRouter.post('/oauth/login', async (req,res) => {
   const {email,password,client_id,redirect_uri,code_challenge,state} = req.body || {};
+  if (!client_id || !redirect_uri || !code_challenge || typeof code_challenge !== 'string' || code_challenge.length > 200) return res.status(400).send('Invalid OAuth request.');
   const rl = checkRateLimit(`oauth:login:${req.ip || 'unknown'}`, { max: 10, windowMs: 60_000 });
   if (!rl.allowed) return res.status(429).send('Too many login attempts.');
   const { data: client } = await getSupabaseAdmin().from('oauth_clients').select('*').eq('client_id',String(client_id)).eq('is_active',true).maybeSingle();
