@@ -76,3 +76,15 @@ Production reviewer credentials and the production MCP URL must be added only af
 - External Stripe checkout architecture.
 - Vercel serverless entrypoint and deployment configuration.
 
+
+
+## Annotation justifications
+
+- `get_profile`: read-only because it only reports the authenticated account summary; no external state is changed.
+- `list_connections`: read-only because it only reads owned connection metadata and never exposes credentials.
+- `get_connection`: read-only for the same ownership-scoped metadata reason.
+- `transform_payload`: read-only because it only computes a preview and does not execute a saved connection.
+- `test_connection`: not read-only because it creates request/audit state; not destructive because the payload is a connector test probe and the endpoint is a user-saved destination.
+- `send_webhook`: not read-only because it performs an external action and consumes quota; destructive is true because the external service may create or change state; open-world is false because the tool can only call a saved user-owned connection rather than an arbitrary model-supplied URL.
+- `get_request_status`: read-only and account-scoped.
+- `list_recent_requests`: read-only and account-scoped.
