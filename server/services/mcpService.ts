@@ -79,13 +79,13 @@ export const createMcpServer = (authInfo?: any) => {
 
   server.registerTool('get_profile', {
     description: descriptions.get_profile,
-    inputSchema: z.object({}),
+    inputSchema: {},
     annotations: MCP_ANNOTATIONS.get_profile
   }, profileHandler);
 
   server.registerTool('list_connections', {
     description: descriptions.list_connections,
-    inputSchema: z.object({}),
+    inputSchema: {},
     annotations: MCP_ANNOTATIONS.list_connections
   }, async () => {
     const user = await authenticatedUser(authInfo);
@@ -98,7 +98,7 @@ export const createMcpServer = (authInfo?: any) => {
 
   server.registerTool('get_connection', {
     description: descriptions.get_connection,
-    inputSchema: z.object({ connection_name: z.string().min(1).max(100) }),
+    inputSchema: { connection_name: z.string().min(1).max(100) },
     annotations: MCP_ANNOTATIONS.get_connection
   }, async ({ connection_name }) => {
     const user = await authenticatedUser(authInfo);
@@ -113,10 +113,7 @@ export const createMcpServer = (authInfo?: any) => {
 
   server.registerTool('transform_payload', {
     description: descriptions.transform_payload,
-    inputSchema: z.object({
-      raw_input: z.string().min(1).max(100_000),
-      transformation_name: z.string().max(100).optional()
-    }),
+    inputSchema: { raw_input: z.string().min(1).max(100_000), transformation_name: z.string().max(100).optional() },
     annotations: MCP_ANNOTATIONS.transform_payload
   }, async ({ raw_input, transformation_name }) => {
     const user=await authenticatedUser(authInfo);
@@ -143,12 +140,7 @@ export const createMcpServer = (authInfo?: any) => {
 
   server.registerTool('send_webhook', {
     description: descriptions.send_webhook,
-    inputSchema: z.object({
-      connection_name:z.string().min(1).max(100),
-      data:z.string().min(1).max(100_000),
-      transformation_name:z.string().max(100).optional(),
-      idempotency_key:z.string().min(8).max(128).optional()
-    }),
+    inputSchema: { connection_name: z.string().min(1).max(100), data: z.string().min(1).max(100_000), transformation_name: z.string().max(100).optional(), idempotency_key: z.string().min(8).max(128).optional() },
     annotations: MCP_ANNOTATIONS.send_webhook
   }, async ({connection_name,data,transformation_name,idempotency_key})=>{
     const user=await authenticatedUser(authInfo);
@@ -163,7 +155,7 @@ export const createMcpServer = (authInfo?: any) => {
 
   server.registerTool('get_request_status', {
     description: descriptions.get_request_status,
-    inputSchema: z.object({ request_id:z.string().min(1).max(100) }),
+    inputSchema: { request_id: z.string().min(1).max(100) },
     annotations: MCP_ANNOTATIONS.get_request_status
   }, async ({request_id})=>{
     const user=await authenticatedUser(authInfo); const request=await db.getRequestById(request_id,user.id);
@@ -173,7 +165,7 @@ export const createMcpServer = (authInfo?: any) => {
 
   server.registerTool('list_recent_requests', {
     description: descriptions.list_recent_requests,
-    inputSchema: z.object({ limit:z.number().int().min(1).max(20).default(5) }),
+    inputSchema: { limit: z.number().int().min(1).max(20).default(5) },
     annotations: MCP_ANNOTATIONS.list_recent_requests
   }, async ({limit})=>{
     const user=await authenticatedUser(authInfo); const requests=await db.getRequestsByUserId(user.id,limit);
