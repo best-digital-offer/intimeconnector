@@ -95,13 +95,13 @@ const BLOCKED_HOSTNAMES = new Set([
   'kubernetes.default.svc',
 ]);
 
-const ALLOWED_PORTS = new Set(['80', '443', '8080', '8443', '3000']);
+const ALLOWED_PORTS = new Set((process.env.ALLOWED_OUTBOUND_PORTS || '443').split(',').map((value) => value.trim()).filter(Boolean));
 
 /**
  * Validate an outbound target URL against SSRF threats
  */
 export async function validateTargetUrl(rawUrl: string): Promise<SsrfValidationResult> {
-  if (!rawUrl || typeof rawUrl !== 'string') {
+  if (!rawUrl || typeof rawUrl !== 'string' || rawUrl.length > 2048) {
     return { isValid: false, reason: 'Empty or invalid URL supplied' };
   }
 
@@ -132,7 +132,7 @@ export async function validateTargetUrl(rawUrl: string): Promise<SsrfValidationR
   const hostname = parsed.hostname.toLowerCase();
 
   // Check blocked domain/hostname list
-  if (BLOCKED_HOSTNAMES.has(hostname)) {
+  if (BLOCKED_HOSTNAMES.has(hostname) || (hostname.endsWith('.') && BLOCKED_HOSTNAMES.has(hostname.slice(0, -1)))) {
     return { isValid: false, reason: `Access to hostname '${hostname}' is restricted.` };
   }
 
@@ -174,6 +174,11 @@ export async function validateTargetUrl(rawUrl: string): Promise<SsrfValidationR
       };
     }
     return { isValid: true, sanitizedUrl: parsed, resolvedIp: hostname };
+  }
+
+  const configuredHosts = (process.env.OUTBOUND_ALLOWED_HOSTS || '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean);
+  if (configuredHosts.length > 0 && !configuredHosts.some((allowed) => hostname === allowed || hostname.endsWith('.' + allowed))) {
+    return { isValid: false, reason: 'Host is not on the outbound allow-list.' };
   }
 
   // Perform DNS resolution check
