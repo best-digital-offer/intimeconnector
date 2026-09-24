@@ -51,6 +51,7 @@ export async function createApp() {
   }));
 
   const bodyLimit = process.env.MAX_REQUEST_BODY_BYTES || '2mb';
+  app.use('/api/billing/webhook', express.raw({ type: 'application/json', limit: '1mb' }));
   app.use(express.json({ limit: bodyLimit }));
   app.use(express.urlencoded({ extended: false, limit: bodyLimit }));
 
