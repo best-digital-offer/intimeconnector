@@ -1,8 +1,8 @@
 import { Router, type Request, type Response } from 'express';
 import crypto from 'node:crypto';
-import { requireAdmin, requireAuth, type AuthenticatedRequest, resolveUserFromToken } from '../security/auth.js';
+import { requireAdmin, requireAuth, type AuthenticatedRequest } from '../security/auth.js';
 import { db } from '../db/store.js';
-import { generateApiKey, hashToken } from '../security/crypto.js';
+import { generateApiKey } from '../security/crypto.js';
 import { checkRateLimit } from '../security/rateLimiter.js';
 import { validateTargetUrl } from '../security/ssrf.js';
 import { executeExternalRequest } from '../services/requestEngine.js';
@@ -73,7 +73,8 @@ apiRouter.get('/connections', requireAuth, async (req:AuthenticatedRequest,res) 
 });
 
 apiRouter.post('/connections', requireAuth, async (req:AuthenticatedRequest,res) => {
-  const {name,description='',endpoint_url,http_method='POST',auth_type='none',secret,headers={},query_params={},timeout_ms=8000,retry_count=2}=req.body||{};
+  const {name,description='',endpoint_url,http_method='POST',auth_type='none',secret,headers:rawHeaders={},query_params={},timeout_ms=8000,retry_count=2}=req.body||{};
+  const headers = Object.fromEntries(Object.entries(rawHeaders || {}).filter(([key]) => !['authorization','proxy-authorization','cookie','set-cookie','host','content-length'].includes(key.toLowerCase())));
   if(!name||!endpoint_url) return res.status(400).json({error:'Name and endpoint URL are required.'});
   if(!['GET','POST','PUT','PATCH','DELETE'].includes(http_method)) return res.status(400).json({error:'Unsupported HTTP method.'});
   if(!['none','bearer','api_key','basic'].includes(auth_type)) return res.status(400).json({error:'Unsupported authentication method.'});
