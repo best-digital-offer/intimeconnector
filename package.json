@@ -1,7 +1,7 @@
 {
   "name": "just-in-time-connector",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "engines": {"node": ">=20"},
   "scripts": {
@@ -47,7 +47,6 @@
     "esbuild": "^0.28.2",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
-    "typescript": "^7.0.2",
-    "vitest": "^3.2.4"
+    "typescript": "^7.0.2"
   }
 }
