@@ -25,12 +25,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
 
     try {
       if (isLogin) {
-        const res = await api.login(email, password);
+        await api.login(email, password);
         const me = await api.getMe();
         onSuccess(me.user);
       } else {
-        const res = await api.signup(email, password, name);
-        onSuccess(res.user);
+        await api.signup(email, password, name);
+        const me = await api.getMe();
+        onSuccess(me.user);
       }
       onClose();
     } catch (err: unknown) {
@@ -41,15 +42,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     }
   };
 
-  const fillDemoCredentials = (role: 'user' | 'admin') => {
-    if (role === 'admin') {
-      setEmail('admin@jitc.io');
-      setPassword('Admin123456!');
-    } else {
-      setEmail('pamarthikrishnasai@gmail.com');
-      setPassword('Password123!');
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
