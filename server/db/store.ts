@@ -41,6 +41,11 @@ class Store {
     return fail(error, true);
   }
 
+  async getProfiles(): Promise<Profile[]> {
+    const { data, error } = await getSupabaseAdmin().from('profiles').select('*').order('created_at', { ascending: false });
+    return fail(error, (data || []) as Profile[]);
+  }
+
   async getPlans(): Promise<Plan[]> {
     const { data, error } = await getSupabaseAdmin().from('plans').select('*').eq('is_active', true).order('price_monthly');
     return fail(error, (data || []) as Plan[]);
@@ -207,6 +212,11 @@ class Store {
   async createRequest(request: ExecutionRequest): Promise<ExecutionRequest> {
     const { data, error } = await getSupabaseAdmin().from('requests').insert(request).select('*').single();
     return fail(error, data as ExecutionRequest);
+  }
+
+  async updateRequest(requestId: string, userId: string, updates: Partial<ExecutionRequest>): Promise<ExecutionRequest | undefined> {
+    const { data, error } = await getSupabaseAdmin().from('requests').update(updates).eq('id', requestId).eq('user_id', userId).select('*').maybeSingle();
+    return fail(error, data as ExecutionRequest | undefined);
   }
 
   async createRequestAttempt(attempt: RequestAttempt): Promise<RequestAttempt> {
