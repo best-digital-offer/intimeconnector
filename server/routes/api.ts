@@ -12,6 +12,17 @@ import { billingEngine } from '../services/billingEngine.js';
 export const apiRouter = Router();
 
 function clientIp(req: Request) { return req.ip || ''; }
+
+async function requireApiKeyScope(req: AuthenticatedRequest, res: Response, scope: string) {
+  const token = req.accessToken || '';
+  if (!token.startsWith('jtc_live_')) return true;
+  const key = await db.getApiKeyByHash((await import('../security/crypto.js')).hashToken(token));
+  if (!key || !Array.isArray(key.scopes) || !key.scopes.includes(scope)) {
+    res.status(403).json({ error: 'API key scope does not permit this operation.' });
+    return false;
+  }
+  return true;
+}
 function jsonLimitString(value: unknown, max = 20000) {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
   if (!text) return '';
@@ -75,6 +86,7 @@ apiRouter.delete('/profile', requireAuth, async (req:AuthenticatedRequest,res) =
 });
 
 apiRouter.get('/connections', requireAuth, async (req:AuthenticatedRequest,res) => {
+  if (!(await requireApiKeyScope(req, res, 'connections:read'))) return;
   const connections=await db.getConnectionsByUserId(req.user!.id);
   const enriched=await Promise.all(connections.map(async c=>({ ...c, credential_masked:(await db.getCredentialByConnectionId(c.id))?.masked_preview })));
   res.json({connections:enriched});
@@ -103,19 +115,31 @@ apiRouter.post('/connections', requireAuth, async (req:AuthenticatedRequest,res)
 });
 
 apiRouter.get('/connections/:id', requireAuth, async (req:AuthenticatedRequest,res) => {
+  if (!(await requireApiKeyScope(req, res, 'connections:read'))) return;
   const c=await db.getConnectionById(req.params.id,req.user!.id);
   if(!c) return res.status(404).json({error:'Connection not found.'});
   res.json({connection:{...c,credential_masked:(await db.getCredentialByConnectionId(c.id))?.masked_preview}});
 });
 
 apiRouter.patch('/connections/:id', requireAuth, async (req:AuthenticatedRequest,res) => {
-  const {secret,...updates}=req.body||{};
-  if(updates.endpoint_url){const ssrf=await validateTargetUrl(String(updates.endpoint_url));if(!ssrf.isValid)return res.status(400).json({error:`Security check failed: ${ssrf.reason}`});}
-  if(updates.headers) {
-    const forbidden=['authorization','proxy-authorization','cookie','set-cookie'];
-    for(const key of Object.keys(updates.headers)) if(forbidden.includes(key.toLowerCase())) delete updates.headers[key];
+  const { secret, ...body } = req.body || {};
+  const allowed = ['name','description','endpoint_url','http_method','auth_type','headers','query_params','timeout_ms','retry_count','status'];
+  const updates: Record<string, unknown> = {};
+  for (const key of allowed) if (Object.prototype.hasOwnProperty.call(body, key)) updates[key] = body[key];
+  if (updates.http_method && !['GET','POST','PUT','PATCH','DELETE'].includes(String(updates.http_method))) return res.status(400).json({error:'Unsupported HTTP method.'});
+  if (updates.auth_type && !['none','bearer','api_key','basic'].includes(String(updates.auth_type))) return res.status(400).json({error:'Unsupported authentication method.'});
+  if (updates.endpoint_url) {
+    const ssrf=await validateTargetUrl(String(updates.endpoint_url));
+    if(!ssrf.isValid)return res.status(400).json({error:`Security check failed: ${ssrf.reason}`});
   }
-  const updated=await db.updateConnection(req.params.id,req.user!.id,updates,secret);
+  if (updates.headers) {
+    const source = updates.headers && typeof updates.headers === 'object' ? updates.headers as Record<string, unknown> : {};
+    updates.headers = Object.fromEntries(Object.entries(source).filter(([key]) => !['authorization','proxy-authorization','cookie','set-cookie','host','content-length'].includes(key.toLowerCase())));
+  }
+  if (updates.timeout_ms !== undefined) updates.timeout_ms = Math.min(Math.max(Number(updates.timeout_ms) || 8000, 1000), 15000);
+  if (updates.retry_count !== undefined) updates.retry_count = Math.min(Math.max(Number(updates.retry_count) || 0, 0), 3);
+  if (updates.status && !['active','paused','error'].includes(String(updates.status))) return res.status(400).json({error:'Unsupported connection status.'});
+  const updated=await db.updateConnection(req.params.id,req.user!.id,updates as any,secret);
   if(!updated)return res.status(404).json({error:'Connection not found.'});
   res.json({connection:{...updated,credential_masked:(await db.getCredentialByConnectionId(updated.id))?.masked_preview}});
 });
@@ -140,7 +164,18 @@ apiRouter.post('/transformations', requireAuth, async (req:AuthenticatedRequest,
   res.status(201).json({transformation:await db.createTransformation(transformation)});
 });
 
-apiRouter.patch('/transformations/:id', requireAuth, async (req:AuthenticatedRequest,res)=>{const u=await db.updateTransformation(req.params.id,req.user!.id,req.body||{});if(!u)return res.status(404).json({error:'Transformation not found.'});res.json({transformation:u});});
+apiRouter.patch('/transformations/:id', requireAuth, async (req:AuthenticatedRequest,res)=>{
+  const body = req.body || {};
+  const allowed = ['connection_id','name','description','mode','rules','template_json','ai_system_instructions','sample_input','sample_output'];
+  const updates: Record<string, unknown> = {};
+  for (const key of allowed) if (Object.prototype.hasOwnProperty.call(body, key)) updates[key] = body[key];
+  if (updates.connection_id !== undefined && updates.connection_id !== null && !(await db.getConnectionById(String(updates.connection_id), req.user!.id))) return res.status(403).json({error:'Transformation connection is not owned by this account.'});
+  if (updates.mode && !['visual','template','ai_prompt'].includes(String(updates.mode))) return res.status(400).json({error:'Unsupported transformation mode.'});
+  if (updates.rules !== undefined && !Array.isArray(updates.rules)) return res.status(400).json({error:'Transformation rules must be an array.'});
+  const u=await db.updateTransformation(req.params.id,req.user!.id,updates as any);
+  if(!u)return res.status(404).json({error:'Transformation not found.'});
+  res.json({transformation:u});
+});
 apiRouter.delete('/transformations/:id', requireAuth, async (req:AuthenticatedRequest,res)=>{const ok=await db.deleteTransformation(req.params.id,req.user!.id);if(!ok)return res.status(404).json({error:'Transformation not found.'});res.json({success:true});});
 
 apiRouter.post('/transformations/preview', requireAuth, async (req:AuthenticatedRequest,res) => {
@@ -155,6 +190,7 @@ apiRouter.post('/transformations/ai-extract', requireAuth, async (req:Authentica
 });
 
 apiRouter.post('/execute', requireAuth, async (req:AuthenticatedRequest,res) => {
+  if (!(await requireApiKeyScope(req, res, 'execute'))) return;
   const {connection_id,transformation_id,input_data,idempotency_key}=req.body||{};
   if(!connection_id)return res.status(400).json({error:'connection_id is required.'});
   const rl=checkRateLimit(req.user!.id,{max:Number(process.env.RATE_LIMIT_MAX_REQUESTS||120),windowMs:Number(process.env.RATE_LIMIT_WINDOW_MS||60000)});
