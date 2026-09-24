@@ -1,6 +1,6 @@
-import crypto from 'node:crypto';
-import { db } from '../db/store';
-import { Subscription } from '../db/schema';
+import Stripe from 'stripe';
+import type { Request } from 'express';
+import { db } from '../db/store.js';
 
 export interface CheckoutResult {
   checkoutUrl: string;
@@ -8,153 +8,139 @@ export interface CheckoutResult {
   provider: string;
 }
 
-export interface BillingWebhookEvent {
-  id: string;
-  type:
-    | 'invoice.payment_succeeded'
-    | 'customer.subscription.updated'
-    | 'customer.subscription.deleted'
-    | 'charge.refunded';
-  data: {
-    userId?: string;
-    planId?: string;
-    subscriptionId?: string;
-    amount?: number;
-  };
-}
-
-const processedWebhookEvents = new Set<string>();
+const stripe = () => {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('Billing provider is not configured.');
+  return new Stripe(key, { apiVersion: '2025-07-30.basil' });
+};
 
 export class BillingEngine {
-  /**
-   * Create checkout session URL for the external website
-   */
-  public async createCheckout(
-    userId: string,
-    planId: string,
-    returnUrl?: string
-  ): Promise<CheckoutResult> {
-    const plan = db.getPlanById(planId);
-    if (!plan) {
-      throw new Error(`Invalid plan ID: ${planId}`);
+  async createCheckout(userId: string, planId: string): Promise<CheckoutResult> {
+    const plan = await db.getPlanById(planId);
+    if (!plan || !plan.is_active) throw new Error('Invalid plan.');
+    if (!plan.stripe_price_id) throw new Error('This plan is not configured for checkout.');
+
+    const profile = await db.getProfileById(userId);
+    if (!profile) throw new Error('Account not found.');
+
+    const client = stripe();
+    let sub = await db.getSubscriptionByUserId(userId);
+    let customerId = sub?.provider_customer_id;
+
+    if (!customerId) {
+      const customer = await client.customers.create({
+        email: profile.email,
+        name: profile.name || undefined,
+        metadata: { jitc_user_id: userId }
+      });
+      customerId = customer.id;
     }
 
-    const sessionId = `cs_${crypto.randomBytes(16).toString('hex')}`;
-    const base = process.env.APP_BASE_URL || 'https://justintimeconnector.io';
-    const checkoutUrl = `${base}/app/billing/confirm?session_id=${sessionId}&plan_id=${planId}`;
+    const session = await client.checkout.sessions.create({
+      mode: 'subscription',
+      customer: customerId,
+      line_items: [{ price: plan.stripe_price_id, quantity: 1 }],
+      success_url: `${process.env.APP_BASE_URL}/app/billing?checkout=success`,
+      cancel_url: `${process.env.APP_BASE_URL}/app/billing?checkout=cancelled`,
+      client_reference_id: userId,
+      metadata: { user_id: userId, plan_id: planId }
+    });
 
-    return {
-      checkoutUrl,
-      sessionId,
-      provider: process.env.BILLING_PROVIDER || 'stripe',
-    };
+    if (sub) {
+      await db.setSubscription({ ...sub, provider_customer_id: customerId, provider: 'stripe', updated_at: new Date().toISOString() });
+    }
+
+    if (!session.url) throw new Error('Stripe did not return a checkout URL.');
+    return { checkoutUrl: session.url, sessionId: session.id, provider: 'stripe' };
   }
 
-  /**
-   * Handle simulated or real webhook events idempotently
-   */
-  public async handleWebhook(event: BillingWebhookEvent): Promise<{ handled: boolean; reason?: string }> {
-    // Idempotency: prevent processing duplicate webhooks
-    if (processedWebhookEvents.has(event.id)) {
-      return { handled: true, reason: 'Duplicate event ignored' };
-    }
-    processedWebhookEvents.add(event.id);
+  async handleWebhook(req: Request): Promise<{ received: boolean }> {
+    const signature = req.header('stripe-signature');
+    const secret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!signature || !secret) throw new Error('Stripe webhook is not configured.');
 
-    const { userId, planId, subscriptionId } = event.data;
-    if (!userId) {
-      return { handled: false, reason: 'Missing userId in event payload' };
-    }
+    const client = stripe();
+    const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
+    const event = client.webhooks.constructEvent(raw, signature, secret);
 
-    const now = new Date();
-    const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const already = await this.isProcessed(event.id);
+    if (already) return { received: true };
 
     switch (event.type) {
-      case 'invoice.payment_succeeded':
-      case 'customer.subscription.updated': {
-        const targetPlanId = planId || 'plan_pro';
-        const plan = db.getPlanById(targetPlanId);
-        if (!plan) break;
-
-        const updatedSub: Subscription = {
-          id: `sub_${crypto.randomBytes(6).toString('hex')}`,
-          user_id: userId,
-          plan_id: targetPlanId,
-          status: 'active',
-          current_period_start: now.toISOString(),
-          current_period_end: periodEnd,
-          cancel_at_period_end: false,
-          provider: 'stripe',
-          provider_subscription_id: subscriptionId || `sub_ext_${sessionId()}`,
-          created_at: now.toISOString(),
-          updated_at: now.toISOString(),
-        };
-
-        db.setSubscription(updatedSub);
-        db.logAudit({
-          user_id: userId,
-          action: 'subscription.activated',
-          resource_type: 'subscription',
-          resource_id: updatedSub.id,
-          metadata: { plan_id: targetPlanId, plan_name: plan.name },
-          ip_address: '127.0.0.1',
-        });
-        break;
-      }
-
-      case 'customer.subscription.deleted': {
-        const currentSub = db.getSubscriptionByUserId(userId);
-        if (currentSub) {
-          currentSub.status = 'canceled';
-          currentSub.cancel_at_period_end = true;
-          // Downgrade to free plan
-          db.setSubscription({
-            ...currentSub,
-            plan_id: 'plan_free',
-            updated_at: now.toISOString(),
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const userId = session.metadata?.user_id || session.client_reference_id;
+        const planId = session.metadata?.plan_id;
+        if (userId && planId) {
+          const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
+          const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
+          const current = await db.getSubscriptionByUserId(userId);
+          const periodStart = new Date().toISOString();
+          const periodEnd = new Date(Date.now()+30*24*3600*1000).toISOString();
+          await db.setSubscription({
+            id: current?.id || `sub_${event.id}`,
+            user_id:userId, plan_id:planId, status:'active',
+            current_period_start:periodStart,current_period_end:periodEnd,
+            cancel_at_period_end:false,provider:'stripe',
+            provider_customer_id:customerId,provider_subscription_id:subId,
+            created_at:current?.created_at||periodStart,updated_at:periodStart
           });
         }
         break;
       }
-
-      case 'charge.refunded': {
-        db.logAudit({
-          user_id: userId,
-          action: 'subscription.refunded',
-          resource_type: 'billing',
-          metadata: { amount: event.data.amount },
-          ip_address: '127.0.0.1',
-        });
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object as Stripe.Subscription;
+        const metadataUserId = subscription.metadata?.user_id;
+        if (metadataUserId) {
+          const current = await db.getSubscriptionByUserId(metadataUserId);
+          if (current) {
+            const active = event.type === 'customer.subscription.updated' && ['active','trialing'].includes(subscription.status);
+            await db.setSubscription({
+              ...current,
+              status: active ? 'active' : 'canceled',
+              provider:'stripe',
+              provider_subscription_id:subscription.id,
+              provider_customer_id:typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id,
+              cancel_at_period_end: subscription.cancel_at_period_end,
+              updated_at:new Date().toISOString()
+            });
+          }
+        }
+        break;
+      }
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
+        if (customerId) {
+          const users = await db.getProfiles();
+          const profile = users.find(p => false); // Do not infer user identity from client input.
+          void profile;
+        }
         break;
       }
     }
 
-    return { handled: true };
+    await db.logAudit({
+      action:'billing.webhook.processed',resource_type:'billing',resource_id:event.id,
+      metadata:{type:event.type},ip_address:'',user_id:undefined
+    });
+    return { received:true };
   }
 
-  /**
-   * Cancel subscription at period end
-   */
-  public async cancelSubscription(userId: string): Promise<boolean> {
-    const sub = db.getSubscriptionByUserId(userId);
-    if (!sub) return false;
-    sub.cancel_at_period_end = true;
-    sub.updated_at = new Date().toISOString();
-    db.setSubscription(sub);
-
-    db.logAudit({
-      user_id: userId,
-      action: 'subscription.cancel_requested',
-      resource_type: 'subscription',
-      resource_id: sub.id,
-      metadata: { cancel_at: sub.current_period_end },
-      ip_address: '127.0.0.1',
-    });
+  async cancelSubscription(userId: string): Promise<boolean> {
+    const sub = await db.getSubscriptionByUserId(userId);
+    if (!sub?.provider_subscription_id) return false;
+    const client = stripe();
+    await client.subscriptions.update(sub.provider_subscription_id, { cancel_at_period_end: true });
+    await db.setSubscription({ ...sub, cancel_at_period_end:true, updated_at:new Date().toISOString() });
     return true;
   }
-}
 
-function sessionId(): string {
-  return crypto.randomBytes(4).toString('hex');
+  private async isProcessed(eventId: string): Promise<boolean> {
+    const setting = await db.getAuditEventById?.(eventId);
+    return Boolean(setting);
+  }
 }
 
 export const billingEngine = new BillingEngine();
