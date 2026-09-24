@@ -63,8 +63,8 @@ export class BillingEngine {
     const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
     const event = client.webhooks.constructEvent(raw, signature, secret);
 
-    const already = await this.isProcessed(event.id);
-    if (already) return { received: true };
+    const claimed = await db.claimBillingWebhook(event.id, event.type);
+    if (!claimed) return { received: true };
 
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -132,10 +132,6 @@ export class BillingEngine {
     return true;
   }
 
-  private async isProcessed(eventId: string): Promise<boolean> {
-    const setting = await db.getAuditEventById?.(eventId);
-    return Boolean(setting);
-  }
 }
 
 export const billingEngine = new BillingEngine();
