@@ -33,7 +33,7 @@ function authVerifier() {
     async verifyAccessToken(token: string) {
       if (!token.startsWith('jtc_oauth_')) throw new Error('MCP requires an OAuth access token');
       const tokenRecord = await db.getOAuthTokenForMcp(token);
-      if (!tokenRecord) throw new Error('Invalid access token');
+      if (!tokenRecord || !tokenRecord.scopes.includes('mcp')) throw new Error('Invalid access token scope');
       const user = await resolveUserFromToken(token);
       if (!user) throw new Error('Invalid access token');
       return {
