@@ -3,9 +3,9 @@ import type {
   Profile, Plan, Subscription, Connection, ConnectionCredential,
   Transformation, TransformationVersion, ExecutionRequest, RequestAttempt,
   Usage, UsageEvent, AuditLog, SecurityEvent, ApiKey
-} from './schema';
-import { getSupabaseAdmin } from './supabase';
-import { encryptCredential, maskSecret } from '../security/crypto';
+} from './schema.js';
+import { getSupabaseAdmin } from './supabase.js';
+import { encryptCredential, maskSecret } from '../security/crypto.js';
 
 function now() { return new Date().toISOString(); }
 function id(prefix: string) { return `${prefix}_${crypto.randomBytes(8).toString('hex')}`; }
