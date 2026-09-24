@@ -46,6 +46,19 @@ export async function resolveUserFromToken(token?: string): Promise<Profile | nu
 
 export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const token = bearerToken(req);
+  if (token?.startsWith('jtc_oauth_')) {
+    return res.status(403).json({ error: 'OAuth access tokens are restricted to the MCP endpoint.' });
+  }
+
+  if (token?.startsWith('jtc_live_')) {
+    const allowed = (
+      (req.method === 'GET' && req.path === '/auth/me') ||
+      (req.method === 'GET' && (req.path === '/connections' || /^\/connections\/[^/]+$/.test(req.path))) ||
+      (req.method === 'POST' && req.path === '/execute')
+    );
+    if (!allowed) return res.status(403).json({ error: 'This API key is restricted to its documented API operations.' });
+  }
+
   const user = await resolveUserFromToken(token || undefined);
 
   if (!user) {
