@@ -1,0 +1,6 @@
+{
+  "name": "Just-in-Time Connector",
+  "description": "Turn natural-language instructions into secure API actions — without Zapier or Make. Production-ready SaaS with remote MCP server for ChatGPT.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
