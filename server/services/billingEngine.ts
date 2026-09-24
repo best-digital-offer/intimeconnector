@@ -11,7 +11,7 @@ export interface CheckoutResult {
 const stripe = () => {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error('Billing provider is not configured.');
-  return new Stripe(key, { apiVersion: '2025-07-30.basil' });
+  return new Stripe(key);
 };
 
 export class BillingEngine {
@@ -109,14 +109,9 @@ export class BillingEngine {
         }
         break;
       }
-      case 'invoice.payment_failed': {
-        const invoice = event.data.object as Stripe.Invoice;
-        const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
-        if (customerId) {
-          const users = await db.getProfiles();
-          const profile = users.find(p => false); // Do not infer user identity from client input.
-          void profile;
-        }
+      case 'invoice.payment_failed':
+      case 'invoice.payment_succeeded':
+      case 'charge.refunded': {
         break;
       }
     }
