@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { Profile } from '../db/schema';
-import { getAuthenticatedSupabaseUser } from '../db/supabase';
+import { getAuthenticatedSupabaseUser, getSupabaseAdmin } from '../db/supabase.js';
 import { db } from '../db/store';
 import { hashToken } from './crypto';
 
@@ -18,6 +18,12 @@ function bearerToken(req: Request): string | null {
 
 export async function resolveUserFromToken(token?: string): Promise<Profile | null> {
   if (!token) return null;
+
+  if (token.startsWith('jtc_oauth_')) {
+    const { data: oauthToken } = await getSupabaseAdmin().from('oauth_tokens').select('*').eq('token_hash', hashToken(token)).gt('expires_at', new Date().toISOString()).maybeSingle();
+    if (!oauthToken) return null;
+    return (await db.getProfileById(oauthToken.user_id)) || null;
+  }
 
   if (token.startsWith('jtc_live_')) {
     const apiKey = await db.getApiKeyByHash(hashToken(token));
