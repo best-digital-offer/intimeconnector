@@ -150,6 +150,8 @@ apiRouter.delete('/connections/:id', requireAuth, async (req:AuthenticatedReques
 });
 
 apiRouter.post('/connections/:id/test', requireAuth, async (req:AuthenticatedRequest,res) => {
+  const rl=checkRateLimit(`test:${req.user!.id}`,{max:20,windowMs:60000});
+  if(!rl.allowed)return res.status(429).json({error:'Test rate limit exceeded.'});
   const c=await db.getConnectionById(req.params.id,req.user!.id); if(!c)return res.status(404).json({error:'Connection not found.'});
   const result=await executeExternalRequest({userId:req.user!.id,connection:c,payload:req.body?.payload||{ping:'jitc_test_probe'},actionType:'test_run'});
   res.status(result.success?200:400).json(result);
@@ -186,6 +188,8 @@ apiRouter.post('/transformations/preview', requireAuth, async (req:Authenticated
 });
 
 apiRouter.post('/transformations/ai-extract', requireAuth, async (req:AuthenticatedRequest,res) => {
+  const rl=checkRateLimit(`ai-extract:${req.user!.id}`,{max:20,windowMs:60000});
+  if(!rl.allowed)return res.status(429).json({error:'AI extraction rate limit exceeded.'});
   if(!req.body?.text)return res.status(400).json({error:'text is required.'});
   try{res.json({extracted:await extractWithGemini(String(req.body.text),req.body.schemaGuide)});}catch{res.status(500).json({error:'AI transformation failed.'});}
 });
@@ -213,7 +217,7 @@ apiRouter.get('/billing', requireAuth, async (req:AuthenticatedRequest,res)=>{
   res.json({plans,subscription:sub,currentPlan,usage});
 });
 
-apiRouter.post('/billing/checkout', requireAuth, async (req:AuthenticatedRequest,res)=>{try{res.json(await billingEngine.createCheckout(req.user!.id,String(req.body?.plan_id||'')));}catch(e){res.status(400).json({error:e instanceof Error?e.message:'Unable to create checkout.'});}});
+apiRouter.post('/billing/checkout', requireAuth, async (req:AuthenticatedRequest,res)=>{const rl=checkRateLimit(`checkout:${req.user!.id}`,{max:5,windowMs:60000});if(!rl.allowed)return res.status(429).json({error:'Checkout rate limit exceeded.'});try{res.json(await billingEngine.createCheckout(req.user!.id,String(req.body?.plan_id||'')));}catch(e){res.status(400).json({error:e instanceof Error?e.message:'Unable to create checkout.'});}});
 apiRouter.post('/billing/webhook', async (req,res)=>{try{const result=await billingEngine.handleWebhook(req);res.json(result);}catch(e){res.status(400).json({error:e instanceof Error?e.message:'Webhook rejected.'});}});
 apiRouter.post('/billing/cancel', requireAuth, async (req:AuthenticatedRequest,res)=>{try{res.json({success:await billingEngine.cancelSubscription(req.user!.id)});}catch(e){res.status(400).json({error:e instanceof Error?e.message:'Unable to cancel subscription.'});}});
 
