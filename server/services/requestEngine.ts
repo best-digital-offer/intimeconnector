@@ -60,8 +60,15 @@ function safePreview(text: string): string {
   try {
     return JSON.stringify(redactSensitiveData(JSON.parse(text)), null, 2).slice(0, 12000);
   } catch {
-    return text.slice(0, 2000);
+    return text.slice(0, 2000).replace(/[\u0000-\u001f\u007f]/g, ' ');
   }
+}
+
+function safeNetworkError(error: unknown): string {
+  if (error instanceof Error && error.name === 'AbortError') return 'Request timed out.';
+  if (error instanceof Error && error.message.startsWith('Redirect blocked:')) return error.message;
+  if (error instanceof Error && error.message === 'Redirect limit exceeded.') return error.message;
+  return 'External request failed.';
 }
 
 function buildHeaders(connection: Connection, secret: string): Record<string,string> {
@@ -118,6 +125,12 @@ export async function executeExternalRequest(options: ExecuteOptions): Promise<E
   }
 
   const target = new URL(connection.endpoint_url);
+  const ssrf = await validateTargetUrl(connection.endpoint_url);
+  if (!ssrf.isValid) {
+    const message = `Security Block: ${ssrf.reason}`;
+    await db.logSecurityEvent({ user_id:userId, event_type:'ssrf_blocked', severity:'high', details:{host:target.hostname,reason:ssrf.reason}, ip_address:'', blocked:true });
+    return {success:false,durationMs:0,requestId,correlationId,safeResponsePreview:JSON.stringify({error:message}),errorMessage:message,attemptsCount:0};
+  }
   const maskedPayload = JSON.stringify(redactSensitiveData(payload || {}));
   const baseRecord: ExecutionRequest = {
     id: requestId, user_id: userId, connection_id: connection.id, transformation_id: transformationId,
@@ -151,13 +164,7 @@ export async function executeExternalRequest(options: ExecuteOptions): Promise<E
     }
   }
 
-  const ssrf = await validateTargetUrl(connection.endpoint_url);
-  if (!ssrf.isValid) {
-    const message = `Security Block: ${ssrf.reason}`;
-    await db.logSecurityEvent({ user_id:userId, event_type:'ssrf_blocked', severity:'high', details:{url:connection.endpoint_url,reason:ssrf.reason}, ip_address:'', blocked:true });
-    await db.updateRequest(requestId,userId,{status:'blocked',error_message:message,safe_response_preview:JSON.stringify({error:message})});
-    return {success:false,durationMs:0,requestId,correlationId,safeResponsePreview:JSON.stringify({error:message}),errorMessage:message,attemptsCount:0};
-  }
+  // Target was validated before quota reservation and request creation.
 
   const credential = await db.getCredentialByConnectionId(connection.id);
   let secret = '';
@@ -217,7 +224,7 @@ export async function executeExternalRequest(options: ExecuteOptions): Promise<E
       const message = error instanceof Error ? error.message : 'External request failed.';
       const isTimeout = error instanceof Error && error.name==='AbortError';
       finalStatus = isTimeout ? 'timeout' : 'failed';
-      finalError = isTimeout ? 'Request timed out.' : message;
+      finalError = safeNetworkError(error);
       await db.createRequestAttempt({
         id:`att_${correlationId}_${attempt}`, request_id:requestId, attempt_number:attempt,
         status:'failed', error_message:finalError, latency_ms:Date.now()-attemptStarted, created_at:new Date().toISOString()
