@@ -1,8 +1,15 @@
 node_modules/
-build/
 dist/
+dist-server/
 coverage/
+playwright-report/
+test-results/
+data/
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
 .DS_Store
 *.log
-.env*
 !.env.example
