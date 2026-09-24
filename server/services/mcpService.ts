@@ -31,13 +31,15 @@ function authVerifier() {
   return {
     async verifyAccessToken(token: string) {
       if (!token.startsWith('jtc_oauth_')) throw new Error('MCP requires an OAuth access token');
+      const tokenRecord = await db.getOAuthTokenForMcp(token);
+      if (!tokenRecord) throw new Error('Invalid access token');
       const user = await resolveUserFromToken(token);
       if (!user) throw new Error('Invalid access token');
       return {
         token,
-        clientId: 'mcp-client',
-        scopes: ['mcp'],
-        expiresAt: Math.floor(Date.now()/1000)+300,
+        clientId: tokenRecord.client_id,
+        scopes: tokenRecord.scopes,
+        expiresAt: Math.floor(new Date(tokenRecord.expires_at).getTime()/1000),
         extra: { userId: user.id }
       };
     }
