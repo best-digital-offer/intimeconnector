@@ -252,7 +252,7 @@ class Store {
   }
 
   async getApiKeyByHash(hash: string): Promise<ApiKey | undefined> {
-    const { data, error } = await getSupabaseAdmin().from('api_keys').select('*').eq('key_hash', hash).eq('is_revoked', false).maybeSingle();
+    const { data, error } = await getSupabaseAdmin().from('api_keys').select('*').eq('key_hash', hash).eq('is_revoked', false).gt('expires_at', new Date().toISOString()).maybeSingle();
     return fail(error, data as ApiKey | undefined);
   }
 
