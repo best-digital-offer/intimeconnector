@@ -4,6 +4,7 @@ import { db } from '../db/store.js';
 import { resolveUserFromToken } from '../security/auth.js';
 import { executeTransformation } from './transformationEngine.js';
 import { executeExternalRequest } from './requestEngine.js';
+import { checkRateLimit } from '../security/rateLimiter.js';
 
 export const MCP_ANNOTATIONS = {
   get_profile: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
@@ -135,6 +136,8 @@ export const createMcpServer = (authInfo?: any) => {
     annotations: MCP_ANNOTATIONS.test_connection
   }, async ({connection_name})=>{
     const user=await authenticatedUser(authInfo);
+    const rl=checkRateLimit(`mcp:test:${user.id}`,{max:20,windowMs:60000});
+    if(!rl.allowed) throw new Error('MCP test rate limit exceeded.');
     const c=(await db.getConnectionsByUserId(user.id)).find(x=>x.name.toLowerCase()===connection_name.toLowerCase());
     if(!c) throw new Error('Connection not found.');
     const result=await executeExternalRequest({userId:user.id,connection:c,payload:{ping:'jitc_test_probe',timestamp:new Date().toISOString()},actionType:'test_run'});
@@ -147,6 +150,8 @@ export const createMcpServer = (authInfo?: any) => {
     annotations: MCP_ANNOTATIONS.send_webhook
   }, async ({connection_name,data,transformation_name,idempotency_key})=>{
     const user=await authenticatedUser(authInfo);
+    const rl=checkRateLimit(`mcp:send:${user.id}`,{max:60,windowMs:60000});
+    if(!rl.allowed) throw new Error('MCP send rate limit exceeded.');
     const c=(await db.getConnectionsByUserId(user.id)).find(x=>x.name.toLowerCase()===connection_name.toLowerCase());
     if(!c) throw new Error('Connection not found.');
     const transformations=await db.getTransformationsByUserId(user.id);
