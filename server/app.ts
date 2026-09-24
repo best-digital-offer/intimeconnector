@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { apiRouter, handleOpenAiAppsChallenge } from './routes/api.js';
 import { handleMcpRequest } from './services/mcpService.js';
+import { oauthRouter } from './routes/oauth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,6 +57,7 @@ export async function createApp() {
   app.use(express.urlencoded({ extended: false, limit: bodyLimit }));
 
   app.get('/.well-known/openai-apps-challenge', handleOpenAiAppsChallenge);
+  app.use('/', oauthRouter);
   app.use('/api', apiRouter);
   app.all('/mcp', handleMcpRequest);
 
