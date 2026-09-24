@@ -2,7 +2,8 @@ import crypto from 'node:crypto';
 
 // Get or derive a 32-byte encryption key from environment
 function getMasterKey(): Buffer {
-  const envKey = process.env.ENCRYPTION_KEY || 'default-jitc-dev-master-encryption-key-32b!';
+  const envKey = process.env.ENCRYPTION_KEY;
+  if (!envKey) throw new Error('ENCRYPTION_KEY is required for credential encryption.');
   if (Buffer.byteLength(envKey, 'utf8') === 32) {
     return Buffer.from(envKey, 'utf8');
   }
