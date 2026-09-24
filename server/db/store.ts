@@ -251,6 +251,11 @@ class Store {
     return fail(error, true);
   }
 
+  async getOAuthTokenForMcp(token: string): Promise<{ client_id: string; scopes: string[]; expires_at: string } | undefined> {
+    const { data, error } = await getSupabaseAdmin().from('oauth_tokens').select('client_id,scopes,expires_at').eq('token_hash',hashToken(token)).gt('expires_at', new Date().toISOString()).maybeSingle();
+    return fail(error, data ? { client_id: data.client_id, scopes: Array.isArray(data.scopes) ? data.scopes : ['mcp'], expires_at: data.expires_at } : undefined);
+  }
+
   async getApiKeyByHash(hash: string): Promise<ApiKey | undefined> {
     const { data, error } = await getSupabaseAdmin().from('api_keys').select('*').eq('key_hash', hash).eq('is_revoked', false).gt('expires_at', new Date().toISOString()).maybeSingle();
     return fail(error, data as ApiKey | undefined);
