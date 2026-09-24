@@ -62,8 +62,16 @@ apiRouter.patch('/profile', requireAuth, async (req:AuthenticatedRequest,res) =>
 });
 
 apiRouter.delete('/profile', requireAuth, async (req:AuthenticatedRequest,res) => {
-  await db.deleteProfile(req.user!.id);
-  res.json({success:true});
+  try {
+    const sub = await db.getSubscriptionByUserId(req.user!.id);
+    if (sub?.provider === 'stripe' && sub.provider_subscription_id) {
+      await billingEngine.cancelSubscription(req.user!.id).catch(() => undefined);
+    }
+    await db.deleteProfile(req.user!.id);
+    res.json({success:true});
+  } catch {
+    res.status(500).json({error:'Unable to delete account safely.'});
+  }
 });
 
 apiRouter.get('/connections', requireAuth, async (req:AuthenticatedRequest,res) => {
