@@ -52,8 +52,11 @@ export const App: React.FC = () => {
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      const [meRes, billingRes, connRes, transRes, reqRes, secRes, keysRes] = await Promise.allSettled([
-        api.getMe(),
+      const me = await api.getMe();
+      setUser(me.user);
+      setSubscription(me.subscription);
+      setUsage(me.usage);
+      const [billingRes, connRes, transRes, reqRes, secRes, keysRes] = await Promise.allSettled([
         api.getBilling(),
         api.getConnections(),
         api.getTransformations(),
@@ -61,12 +64,6 @@ export const App: React.FC = () => {
         api.getSecurityEvents(),
         api.getApiKeys(),
       ]);
-
-      if (meRes.status === 'fulfilled') {
-        setUser(meRes.value.user);
-        setSubscription(meRes.value.subscription);
-        setUsage(meRes.value.usage);
-      }
 
       if (billingRes.status === 'fulfilled') {
         setPlans(billingRes.value.plans || []);
@@ -94,7 +91,8 @@ export const App: React.FC = () => {
         setApiKeys(keysRes.value.api_keys || []);
       }
     } catch (err) {
-      console.error('Failed to load initial SaaS data:', err);
+      setUser(null);
+      setIsLanding(true);
     } finally {
       setLoading(false);
     }
@@ -277,7 +275,6 @@ export const App: React.FC = () => {
                 usage={usage}
                 onCheckout={(planId) => api.createCheckout(planId)}
                 onCancel={() => api.cancelSubscription()}
-                onTriggerWebhook={(evt) => api.triggerTestWebhook(evt)}
               />
             )}
 
