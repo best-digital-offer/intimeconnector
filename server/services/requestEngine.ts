@@ -199,7 +199,7 @@ export async function executeExternalRequest(options: ExecuteOptions): Promise<E
         if (!headers['Content-Type']) headers['Content-Type']='application/json';
       }
 
-      const { response, url: finalUrl } = await fetchWithValidatedRedirects(url, {
+      const { response } = await fetchWithValidatedRedirects(url, {
         method: connection.http_method,
         headers,
         body,
@@ -221,7 +221,6 @@ export async function executeExternalRequest(options: ExecuteOptions): Promise<E
       if (!retryable) break;
       await new Promise(r=>setTimeout(r,Math.min(2000,250*(2**(attempt-1)))));
     } catch(error) {
-      const message = error instanceof Error ? error.message : 'External request failed.';
       const isTimeout = error instanceof Error && error.name==='AbortError';
       finalStatus = isTimeout ? 'timeout' : 'failed';
       finalError = safeNetworkError(error);
