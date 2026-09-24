@@ -168,7 +168,7 @@ export async function executeExternalRequest(options: ExecuteOptions): Promise<E
   const headers = buildHeaders(connection, secret);
   const timeoutMs = Math.min(Math.max(Number(connection.timeout_ms || process.env.OUTBOUND_TIMEOUT_MS || 8000),1000),15000);
   const requestedRetries = Math.min(Math.max(Number(connection.retry_count || 0),0),3);
-  const maxAttempts = connection.http_method === 'GET' || connection.http_method === 'HEAD' || idempotencyKey ? Math.max(1, requestedRetries + 1) : 1;
+  const maxAttempts = connection.http_method === 'GET' || idempotencyKey ? Math.max(1, requestedRetries + 1) : 1;
 
   let finalStatus: RequestStatus = 'failed';
   let finalHttpStatus: number | undefined;
