@@ -231,6 +231,7 @@ apiRouter.get('/api-keys', requireAuth, async (req:AuthenticatedRequest,res)=>re
 apiRouter.post('/api-keys', requireAuth, async (req:AuthenticatedRequest,res)=>{
   const requestedScopes=Array.isArray(req.body?.scopes) ? req.body.scopes.map((s:unknown)=>String(s)) : ['connections:read','execute','profile:read'];
   const allowedScopes=['connections:read','execute','profile:read'];
+  if (requestedScopes.length === 0) return res.status(400).json({error:'At least one API key scope is required.'});
   if(requestedScopes.some((s:string)=>!allowedScopes.includes(s))) return res.status(400).json({error:'Invalid API key scope.'});
   const {rawKey:keyRaw,keyPrefix:prefix,keyHash:hash}=generateApiKey();
   const key:any={id:`key_${crypto.randomBytes(8).toString('hex')}`,user_id:req.user!.id,name:String(req.body?.name||'API Key').trim().slice(0,100),key_prefix:prefix,key_hash:hash,scopes:[...new Set(requestedScopes)],is_revoked:false,created_at:new Date().toISOString()};
