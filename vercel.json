@@ -1,5 +1,8 @@
 {
   "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": null,
   "builds": [
     { "src": "api/index.ts", "use": "@vercel/node" }
   ],
@@ -7,6 +10,7 @@
     { "src": "/api/(.*)", "dest": "/api/index.ts" },
     { "src": "/mcp", "dest": "/api/index.ts" },
     { "src": "/\\.well-known/(.*)", "dest": "/api/index.ts" },
+    { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
