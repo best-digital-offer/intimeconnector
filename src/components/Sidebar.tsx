@@ -102,22 +102,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </nav>
         </div>
 
-        <div>
-          <p className="px-3 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">Administration</p>
-          <nav className="mt-2 space-y-1">
-            <button
-              onClick={() => onSelectTab('admin')}
-              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition ${
-                activeTab === 'admin'
-                  ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
-                  : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-              }`}
-            >
-              <SlidersHorizontal className="h-4 w-4 text-purple-400" />
-              <span>Admin Panel</span>
-            </button>
-          </nav>
-        </div>
+        {isAdmin && (
+          <div>
+            <p className="px-3 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">Administration</p>
+            <nav className="mt-2 space-y-1">
+              <button
+                onClick={() => onSelectTab('admin')}
+                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition ${
+                  activeTab === 'admin'
+                    ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+                    : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+                }`}
+              >
+                <SlidersHorizontal className="h-4 w-4 text-purple-400" />
+                <span>Admin Panel</span>
+              </button>
+            </nav>
+          </div>
+        )}
       </div>
 
       {/* Endpoint badge */}
