@@ -1,5 +1,5 @@
 import { McpServer, createMcpHandler } from '@modelcontextprotocol/server';
-import { requireBearerAuth } from '@modelcontextprotocol/server/middleware/bearerAuth';
+import { requireBearerAuth } from '@modelcontextprotocol/express';
 import * as z from 'zod/v4';
 import { db } from '../db/store.js';
 import { resolveUserFromToken } from '../security/auth.js';
@@ -45,8 +45,9 @@ function authVerifier() {
 }
 
 async function authenticatedUser(authInfo: any) {
-  const token = String(authInfo?.token || '');
-  const user = await resolveUserFromToken(token);
+  const userId = String(authInfo?.extra?.userId || '');
+  if (!userId) throw new Error('Authentication required.');
+  const user = await db.getProfileById(userId);
   if (!user) throw new Error('Authentication required.');
   return user;
 }
@@ -184,13 +185,17 @@ export const createMcpServer = (authInfo?: any) => {
 };
 
 const mcpHandler = createMcpHandler((context) => createMcpServer(context.authInfo));
+const nodeHandlerPromise = import('@modelcontextprotocol/node').then(({ toNodeHandler }) => toNodeHandler(mcpHandler));
 
-export async function handleMcpRequest(req: any, res: any) {
-  const auth = await authVerifier().verifyAccessToken(req.headers.authorization?.replace(/^Bearer\s+/i,'') || '');
-  return requireBearerAuth({ verifier: authVerifier() })(req,res,async () => {
-    (req as any).auth = auth;
-    const { toNodeHandler } = await import('@modelcontextprotocol/node');
-    return toNodeHandler(mcpHandler)(req,res);
+export async function handleMcpRequest(req: any, res: any, next?: any) {
+  const middleware = requireBearerAuth({
+    verifier: authVerifier(),
+    requiredScopes: ['mcp'],
+    resourceMetadataUrl: (process.env.OAUTH_ISSUER || process.env.MCP_BASE_URL || process.env.APP_BASE_URL || '') + '/.well-known/oauth-protected-resource'
+  });
+  return middleware(req, res, async () => {
+    const nodeHandler = await nodeHandlerPromise;
+    return nodeHandler(req, res, req.body);
   });
 }
 
