@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { Transformation, TransformationRule } from '../db/schema';
+import { Transformation, TransformationRule } from '../db/schema.js';
 
 // Helper to safely get nested property via dot-notation (e.g., "customer.name")
 function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
