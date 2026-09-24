@@ -3,7 +3,8 @@ import { Transformation, TransformationRule } from '../db/schema';
 
 // Helper to safely get nested property via dot-notation (e.g., "customer.name")
 function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-  const parts = path.split('.');
+  const parts = safePath(path);
+  if (!parts) return undefined;
   let current: unknown = obj;
   for (const part of parts) {
     if (current && typeof current === 'object' && part in (current as Record<string, unknown>)) {
@@ -16,8 +17,17 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
 }
 
 // Helper to safely set nested property via dot-notation
+const FORBIDDEN_PATH_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor']);
+
+function safePath(path: string): string[] | null {
+  const parts = path.split('.').filter(Boolean);
+  if (!parts.length || parts.length > 20 || parts.some((part) => FORBIDDEN_PATH_SEGMENTS.has(part))) return null;
+  return parts;
+}
+
 function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
-  const parts = path.split('.');
+  const parts = safePath(path);
+  if (!parts) return;
   let current = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     const part = parts[i];
@@ -199,7 +209,8 @@ export function applyTemplateInterpolation(
 ): unknown {
   let rendered = templateString;
   for (const [key, val] of Object.entries(variables)) {
-    const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
+    const escapedKey = key.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');');
+    const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'g');
     rendered = rendered.replace(regex, typeof val === 'object' ? JSON.stringify(val) : String(val ?? ''));
   }
 
