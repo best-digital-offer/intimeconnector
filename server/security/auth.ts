@@ -1,107 +1,70 @@
-import { Request, Response, NextFunction } from 'express';
-import crypto from 'node:crypto';
+import type { Request, Response, NextFunction } from 'express';
+import type { Profile } from '../db/schema';
+import { getAuthenticatedSupabaseUser } from '../db/supabase';
 import { db } from '../db/store';
-import { Profile } from '../db/schema';
 import { hashToken } from './crypto';
-
-// Session token store: token -> { userId, expiresAt }
-interface SessionData {
-  userId: string;
-  expiresAt: number;
-}
-
-const sessions = new Map<string, SessionData>();
-
-export function createSession(userId: string, ttlMs = 7 * 24 * 3600 * 1000): string {
-  const token = `sess_${crypto.randomBytes(32).toString('base64url')}`;
-  sessions.set(token, {
-    userId,
-    expiresAt: Date.now() + ttlMs,
-  });
-  return token;
-}
-
-export function revokeSession(token: string): void {
-  sessions.delete(token);
-}
-
-/**
- * Resolves a Profile from a Bearer token (session token, API key, or OAuth access token)
- */
-export function resolveUserFromToken(rawHeader?: string): Profile | null {
-  if (!rawHeader) return null;
-
-  const parts = rawHeader.trim().split(' ');
-  const token = parts.length === 2 && parts[0].toLowerCase() === 'bearer' ? parts[1] : parts[0];
-  if (!token) return null;
-
-  // 1. Check active session
-  if (token.startsWith('sess_')) {
-    const session = sessions.get(token);
-    if (session && session.expiresAt > Date.now()) {
-      const user = db.getProfileById(session.userId);
-      if (user) return user;
-    }
-  }
-
-  // 2. Check personal API key (jtc_live_...)
-  if (token.startsWith('jtc_live_')) {
-    const keyHash = hashToken(token);
-    const apiKey = db.getApiKeyByHash(keyHash);
-    if (apiKey) {
-      apiKey.last_used_at = new Date().toISOString();
-      const user = db.getProfileById(apiKey.user_id);
-      if (user) return user;
-    }
-  }
-
-  // 3. Fallback for demo convenience: if user ID is directly passed in header (e.g. during development/testing)
-  if (token.startsWith('usr_')) {
-    const user = db.getProfileById(token);
-    if (user) return user;
-  }
-
-  return null;
-}
 
 export interface AuthenticatedRequest extends Request {
   user?: Profile;
+  accessToken?: string;
 }
 
-/**
- * Express middleware to require authentication
- */
-export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  const user = resolveUserFromToken(authHeader);
+function bearerToken(req: Request): string | null {
+  const header = req.headers.authorization;
+  if (!header) return null;
+  const [scheme, token] = header.trim().split(/\s+/);
+  return scheme?.toLowerCase() === 'bearer' && token ? token : null;
+}
+
+export async function resolveUserFromToken(token?: string): Promise<Profile | null> {
+  if (!token) return null;
+
+  if (token.startsWith('jtc_live_')) {
+    const apiKey = await db.getApiKeyByHash(hashToken(token));
+    if (!apiKey) return null;
+    const profile = await db.getProfileById(apiKey.user_id);
+    return profile || null;
+  }
+
+  const authUser = await getAuthenticatedSupabaseUser(token);
+  if (!authUser) return null;
+
+  const profile = await db.getProfileById(authUser.id);
+  if (!profile) return null;
+
+  if (profile.email !== authUser.email) {
+    return (await db.updateProfile(authUser.id, { email: authUser.email || profile.email })) || profile;
+  }
+  return profile;
+}
+
+export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  const token = bearerToken(req);
+  const user = await resolveUserFromToken(token || undefined);
 
   if (!user) {
-    db.logSecurityEvent({
+    await db.logSecurityEvent({
       event_type: 'auth_failure',
       severity: 'medium',
       details: { path: req.path, method: req.method },
-      ip_address: req.ip || '127.0.0.1',
+      ip_address: req.ip || '',
       blocked: true,
-    });
+    }).catch(() => undefined);
+
     return res.status(401).json({
       error: 'Unauthorized',
-      message: 'A valid Bearer session token or API key is required.',
+      message: 'A valid Supabase access token or personal API key is required.',
     });
   }
 
   req.user = user;
-  next();
+  req.accessToken = token || undefined;
+  return next();
 }
 
-/**
- * Require admin role
- */
 export function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({
-      error: 'Forbidden',
-      message: 'Admin privileges required.',
-    });
+    return res.status(403).json({ error: 'Forbidden', message: 'Admin privileges required.' });
   }
-  next();
+  return next();
 }
