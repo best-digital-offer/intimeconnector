@@ -26,7 +26,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     try {
       if (isLogin) {
         const res = await api.login(email, password);
-        onSuccess(res.user);
+        const me = await api.getMe();
+        onSuccess(me.user);
       } else {
         const res = await api.signup(email, password, name);
         onSuccess(res.user);
@@ -121,27 +122,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
           </div>
 
           {/* Quick Demo Logins */}
-          <div className="rounded-lg bg-slate-950 p-2.5 border border-slate-800 space-y-1.5">
-            <span className="text-[10px] uppercase font-semibold text-slate-500 block">
-              Pre-configured Demo Accounts:
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => fillDemoCredentials('user')}
-                className="rounded bg-slate-800 hover:bg-slate-700 px-2 py-1 text-[11px] text-cyan-300 font-mono transition"
-              >
-                Demo User
-              </button>
-              <button
-                type="button"
-                onClick={() => fillDemoCredentials('admin')}
-                className="rounded bg-slate-800 hover:bg-slate-700 px-2 py-1 text-[11px] text-purple-300 font-mono transition"
-              >
-                Admin User
-              </button>
-            </div>
-          </div>
+          <p className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-[11px] leading-relaxed text-slate-400">
+            Accounts are created and authenticated securely with Supabase Auth. No demo credentials are embedded in the application.
+          </p>
 
           <button
             type="submit"
