@@ -1,8 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { Profile } from '../db/schema';
 import { getAuthenticatedSupabaseUser, getSupabaseAdmin } from '../db/supabase.js';
-import { db } from '../db/store';
-import { hashToken } from './crypto';
+import { db } from '../db/store.js';
+import { hashToken } from './crypto.js';
 
 export interface AuthenticatedRequest extends Request {
   user?: Profile;
