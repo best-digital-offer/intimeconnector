@@ -164,6 +164,16 @@ export function applyDeterministicRules(
         break;
       }
 
+      case 'create_array': {
+        if (rule.target_field) {
+          const values = Array.isArray(rule.fields)
+            ? rule.fields.map((field) => getNestedValue(output, field))
+            : [rule.value];
+          setNestedValue(output, rule.target_field, values);
+        }
+        break;
+      }
+
       case 'set_default': {
         if (rule.target_field) {
           const existing = getNestedValue(output, rule.target_field);
@@ -208,9 +218,21 @@ export function applyTemplateInterpolation(
   variables: Record<string, unknown>
 ): unknown {
   let rendered = templateString;
-  for (const [key, val] of Object.entries(variables)) {
-    const replacement = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '');
-    rendered = rendered.split('{{' + key + '}}').join(replacement);
+  let i = 0;
+  while (i < rendered.length) {
+    const start = rendered.indexOf('{{', i);
+    if (start < 0) break;
+    const end = rendered.indexOf('}}', start + 2);
+    if (end < 0) break;
+    const key = rendered.slice(start + 2, end).trim();
+    if (Object.prototype.hasOwnProperty.call(variables, key)) {
+      const val = variables[key];
+      const replacement = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '');
+      rendered = rendered.slice(0, start) + replacement + rendered.slice(end + 2);
+      i = start + replacement.length;
+    } else {
+      i = end + 2;
+    }
   }
 
   try {
@@ -335,6 +357,10 @@ export async function executeTransformation(
 
   if (transformation.mode === 'template' && transformation.template_json) {
     return applyTemplateInterpolation(transformation.template_json, parsedInput) as Record<string, unknown>;
+  }
+
+  if (transformation.mode === 'ai_prompt' && transformation.ai_system_instructions) {
+    return extractWithGemini(JSON.stringify(parsedInput), transformation.ai_system_instructions);
   }
 
   return applyDeterministicRules(parsedInput, transformation.rules || []);
