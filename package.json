@@ -21,6 +21,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
     "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "helmet": "^8.1.0",
     "lucide-react": "^0.546.0",
