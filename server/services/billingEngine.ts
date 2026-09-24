@@ -78,15 +78,7 @@ export class BillingEngine {
           const current = await db.getSubscriptionByUserId(userId);
           let periodStart = new Date().toISOString();
           let periodEnd = new Date(Date.now()+30*24*3600*1000).toISOString();
-          if (subId) {
-            try {
-              const stripeSubscription = await client.subscriptions.retrieve(subId);
-              if (stripeSubscription.current_period_start) periodStart = new Date(stripeSubscription.current_period_start * 1000).toISOString();
-              if (stripeSubscription.current_period_end) periodEnd = new Date(stripeSubscription.current_period_end * 1000).toISOString();
-            } catch {
-              // Safe fallback if the subscription cannot be retrieved yet.
-            }
-          }
+          // Stripe webhook payloads can vary by API version; keep a safe local fallback here.
           await db.setSubscription({
             id: current?.id || `sub_${event.id}`,
             user_id:userId, plan_id:planId, status:'active',
