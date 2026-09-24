@@ -30,6 +30,7 @@ const descriptions = {
 function authVerifier() {
   return {
     async verifyAccessToken(token: string) {
+      if (!token.startsWith('jtc_oauth_')) throw new Error('MCP requires an OAuth access token');
       const user = await resolveUserFromToken(token);
       if (!user) throw new Error('Invalid access token');
       return {
