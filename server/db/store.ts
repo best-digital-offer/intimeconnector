@@ -286,13 +286,13 @@ class Store {
       admin.from('profiles').select('*',{count:'exact',head:true}),
       admin.from('connections').select('*',{count:'exact',head:true}),
       admin.from('transformations').select('*',{count:'exact',head:true}),
-      admin.from('requests').select('status',{count:'exact',head:true}),
+      admin.from('requests').select('status',{count:'exact',head:true}).eq('status','success'),
       admin.from('security_events').select('*',{count:'exact',head:true}),
       admin.from('subscriptions').select('*',{count:'exact',head:true}).eq('status','active')
     ]);
     return {
       totalUsers:u.count||0,totalConnections:c.count||0,totalTransformations:t.count||0,totalRequests:r.count||0,
-      successfulRequests:0,failedRequests:0,totalSecurityEvents:s.count||0,activeSubscriptions:sub.count||0
+      successfulRequests:r.count||0,failedRequests:Math.max(0,(await admin.from('requests').select('id',{count:'exact',head:true}).in('status',['failed','timeout']).then(x=>x.count||0))),totalSecurityEvents:s.count||0,activeSubscriptions:sub.count||0
     };
   }
 }
