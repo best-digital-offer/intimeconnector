@@ -2,15 +2,11 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "framework": null,
-  "builds": [
-    { "src": "api/index.ts", "use": "@vercel/node" }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index.ts" },
-    { "src": "/mcp", "dest": "/api/index.ts" },
-    { "src": "/\\.well-known/(.*)", "dest": "/api/index.ts" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/index.html" }
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api" },
+    { "source": "/mcp", "destination": "/api" },
+    { "source": "/.well-known/:path*", "destination": "/api" },
+    { "source": "/((?!api/|mcp$|\\.well-known/).*)", "destination": "/index.html" }
   ]
 }
