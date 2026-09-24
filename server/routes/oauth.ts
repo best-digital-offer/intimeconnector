@@ -43,7 +43,7 @@ oauthRouter.get('/oauth/authorize', async (req,res) => {
   const q = req.query as Record<string,string>;
   const rl = checkRateLimit(`oauth:authorize:${req.ip || 'unknown'}`, { max: 30, windowMs: 60_000 });
   if (!rl.allowed) return res.status(429).send('Too many authorization requests.');
-  if (q.response_type !== 'code' || q.code_challenge_method !== 'S256' || !q.client_id || !q.redirect_uri || !q.code_challenge) return res.status(400).send('Invalid OAuth authorization request.');
+  if (q.response_type !== 'code' || q.code_challenge_method !== 'S256' || !q.client_id || !q.redirect_uri || !q.code_challenge || !validRedirectUri(q.redirect_uri)) return res.status(400).send('Invalid OAuth authorization request.');
   const { data: client } = await getSupabaseAdmin().from('oauth_clients').select('*').eq('client_id',q.client_id).eq('is_active',true).maybeSingle();
   if (!client || !Array.isArray(client.redirect_uris) || !client.redirect_uris.includes(q.redirect_uri)) return res.status(400).send('Invalid OAuth client or redirect URI.');
   const hidden = (name:string,value:string) => '<input type="hidden" name="' + name + '" value="' + esc(value) + '">';
@@ -56,7 +56,7 @@ oauthRouter.post('/oauth/login', async (req,res) => {
   const rl = checkRateLimit(`oauth:login:${req.ip || 'unknown'}`, { max: 10, windowMs: 60_000 });
   if (!rl.allowed) return res.status(429).send('Too many login attempts.');
   const { data: client } = await getSupabaseAdmin().from('oauth_clients').select('*').eq('client_id',String(client_id)).eq('is_active',true).maybeSingle();
-  if (!client || !Array.isArray(client.redirect_uris) || !client.redirect_uris.includes(String(redirect_uri))) return res.status(400).send('Invalid OAuth client.');
+  if (!validRedirectUri(String(redirect_uri)) || !client || !Array.isArray(client.redirect_uris) || !client.redirect_uris.includes(String(redirect_uri))) return res.status(400).send('Invalid OAuth client.');
   const { data, error } = await getSupabasePublic().auth.signInWithPassword({ email:String(email), password:String(password) });
   if (error || !data.user) return res.status(401).send('Invalid credentials.');
   const code = 'oc_' + b64url(crypto.randomBytes(32));
