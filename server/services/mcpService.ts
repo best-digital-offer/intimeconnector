@@ -1,5 +1,4 @@
 import { McpServer, createMcpHandler } from '@modelcontextprotocol/server';
-import { requireBearerAuth } from '@modelcontextprotocol/express';
 import * as z from 'zod/v4';
 import { db } from '../db/store.js';
 import { resolveUserFromToken } from '../security/auth.js';
@@ -11,8 +10,8 @@ export const MCP_ANNOTATIONS = {
   list_connections: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
   get_connection: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
   transform_payload: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
-  test_connection: { readOnlyHint: false, openWorldHint: true, destructiveHint: false },
-  send_webhook: { readOnlyHint: false, openWorldHint: true, destructiveHint: true },
+  test_connection: { readOnlyHint: false, openWorldHint: false, destructiveHint: false },
+  send_webhook: { readOnlyHint: false, openWorldHint: false, destructiveHint: true },
   get_request_status: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
   list_recent_requests: { readOnlyHint: true, openWorldHint: false, destructiveHint: false }
 } as const;
@@ -187,16 +186,18 @@ export const createMcpServer = (authInfo?: any) => {
 const mcpHandler = createMcpHandler((context) => createMcpServer(context.authInfo));
 const nodeHandlerPromise = import('@modelcontextprotocol/node').then(({ toNodeHandler }) => toNodeHandler(mcpHandler));
 
-export async function handleMcpRequest(req: any, res: any, next?: any) {
-  const middleware = requireBearerAuth({
-    verifier: authVerifier(),
-    requiredScopes: ['mcp'],
-    resourceMetadataUrl: (process.env.OAUTH_ISSUER || process.env.MCP_BASE_URL || process.env.APP_BASE_URL || '') + '/.well-known/oauth-protected-resource'
-  });
-  return middleware(req, res, async () => {
+export async function handleMcpRequest(req: any, res: any) {
+  const metadata = (process.env.OAUTH_ISSUER || process.env.MCP_BASE_URL || process.env.APP_BASE_URL || '') + '/.well-known/oauth-protected-resource';
+  const token = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
+  try {
+    const auth = await authVerifier().verifyAccessToken(token);
+    req.auth = auth;
     const nodeHandler = await nodeHandlerPromise;
     return nodeHandler(req, res, req.body);
-  });
+  } catch {
+    res.setHeader('WWW-Authenticate', 'Bearer realm="just-in-time-connector", resource_metadata="' + metadata + '"');
+    return res.status(401).json({ error: 'invalid_token' });
+  }
 }
 
 export async function handleMcpHttp(req: Request) {
