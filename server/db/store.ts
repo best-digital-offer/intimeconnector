@@ -37,8 +37,20 @@ class Store {
   }
 
   async deleteProfile(userId: string): Promise<boolean> {
-    const { error } = await getSupabaseAdmin().from('profiles').delete().eq('id', userId);
-    return fail(error, true);
+    const { error } = await getSupabaseAdmin().auth.admin.deleteUser(userId);
+    if (error) throw new Error(error.message);
+    return true;
+  }
+
+  async claimBillingWebhook(eventId: string, eventType: string): Promise<boolean> {
+    const { error } = await getSupabaseAdmin().from('billing_webhook_events').insert({
+      event_id: eventId,
+      event_type: eventType,
+      received_at: now()
+    });
+    if (!error) return true;
+    if (error.code === '23505') return false;
+    throw new Error(error.message);
   }
 
   async getProfiles(): Promise<Profile[]> {
