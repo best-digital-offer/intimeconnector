@@ -18,7 +18,6 @@ interface BillingViewProps {
   usage: Usage | null;
   onCheckout: (planId: string) => Promise<any>;
   onCancel: () => Promise<void>;
-  onTriggerWebhook: (event: any) => Promise<any>;
 }
 
 export const BillingView: React.FC<BillingViewProps> = ({
@@ -227,15 +226,7 @@ export const BillingView: React.FC<BillingViewProps> = ({
         })}
       </div>
 
-      {/* Webhook Simulator for Testing Entitlements & Idempotency */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-white">Payment Provider Webhook Simulator</h3>
-            <p className="text-xs text-slate-400">
-              Test server-side entitlement grant, idempotency deduplication, and downgrade handling
-            </p>
-          </div>
+
           {webhookStatus && <span className="text-xs font-mono text-cyan-400">{webhookStatus}</span>}
         </div>
 
