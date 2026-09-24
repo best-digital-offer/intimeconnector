@@ -4,11 +4,10 @@ import crypto from 'node:crypto';
 function getMasterKey(): Buffer {
   const envKey = process.env.ENCRYPTION_KEY;
   if (!envKey) throw new Error('ENCRYPTION_KEY is required for credential encryption.');
-  if (Buffer.byteLength(envKey, 'utf8') === 32) {
-    return Buffer.from(envKey, 'utf8');
+  if (Buffer.byteLength(envKey, 'utf8') !== 32) {
+    throw new Error('ENCRYPTION_KEY must be exactly 32 bytes in production.');
   }
-  // Deterministically hash to 32 bytes if not exact length
-  return crypto.createHash('sha256').update(envKey).digest();
+  return Buffer.from(envKey, 'utf8');
 }
 
 /**
