@@ -64,7 +64,7 @@ export const createMcpServer = (authInfo?: any) => {
     const usage = await db.getUsageByUserId(user.id);
     const connections = await db.getConnectionsByUserId(user.id);
     return {
-      content: [{ type: 'text', text: JSON.stringify({
+      content: [{ type: 'text' as const, text: JSON.stringify({
         plan: plan?.name || 'Free',
         plan_tier: plan?.tier || 'free',
         subscription_status: sub?.status || 'active',
@@ -90,7 +90,7 @@ export const createMcpServer = (authInfo?: any) => {
   }, async () => {
     const user = await authenticatedUser(authInfo);
     const list = await db.getConnectionsByUserId(user.id);
-    return { content: [{ type: 'text', text: JSON.stringify(list.map(c => ({
+    return { content: [{ type: 'text' as const, text: JSON.stringify(list.map(c => ({
       name: c.name, description: c.description, endpoint_domain: new URL(c.endpoint_url).hostname,
       http_method: c.http_method, auth_type: c.auth_type, status: c.status, last_test_status: c.last_test_status
     }))) }] };
@@ -123,7 +123,7 @@ export const createMcpServer = (authInfo?: any) => {
       : transformations[0];
     if(!transformation) throw new Error('No saved transformation found.');
     const output=await executeTransformation(transformation,raw_input);
-    return { content:[{type:'text',text:JSON.stringify(output)}] };
+    return { content:[{type:'text' as const,text:JSON.stringify(output)}] };
   });
 
   server.registerTool('test_connection', {
@@ -135,7 +135,7 @@ export const createMcpServer = (authInfo?: any) => {
     const c=(await db.getConnectionsByUserId(user.id)).find(x=>x.name.toLowerCase()===connection_name.toLowerCase());
     if(!c) throw new Error('Connection not found.');
     const result=await executeExternalRequest({userId:user.id,connection:c,payload:{ping:'jitc_test_probe',timestamp:new Date().toISOString()},actionType:'test_run'});
-    return {content:[{type:'text',text:JSON.stringify({success:result.success,http_status:result.httpStatus,duration_ms:result.durationMs,request_id:result.requestId})}]};
+    return {content:[{type:'text' as const,text:JSON.stringify({success:result.success,http_status:result.httpStatus,duration_ms:result.durationMs,request_id:result.requestId})}]};
   });
 
   server.registerTool('send_webhook', {
@@ -150,7 +150,7 @@ export const createMcpServer = (authInfo?: any) => {
     const t=transformation_name ? transformations.find(x=>x.name.toLowerCase()===transformation_name.toLowerCase()) : transformations.find(x=>x.connection_id===c.id);
     const payload=t ? await executeTransformation(t,data) : data;
     const result=await executeExternalRequest({userId:user.id,connection:c,payload,transformationId:t?.id,actionType:'mcp_tool',idempotencyKey:idempotency_key});
-    return {content:[{type:'text',text:JSON.stringify({success:result.success,http_status:result.httpStatus,duration_ms:result.durationMs,request_id:result.requestId,response_preview:result.safeResponsePreview,error:result.errorMessage})}]};
+    return {content:[{type:'text' as const,text:JSON.stringify({success:result.success,http_status:result.httpStatus,duration_ms:result.durationMs,request_id:result.requestId,response_preview:result.safeResponsePreview,error:result.errorMessage})}]};
   });
 
   server.registerTool('get_request_status', {
@@ -160,7 +160,7 @@ export const createMcpServer = (authInfo?: any) => {
   }, async ({request_id})=>{
     const user=await authenticatedUser(authInfo); const request=await db.getRequestById(request_id,user.id);
     if(!request) throw new Error('Request not found.');
-    return {content:[{type:'text',text:JSON.stringify({status:request.status,http_status:request.http_status,duration_ms:request.duration_ms,attempts:request.attempts_count,error:request.error_message||undefined})}]};
+    return {content:[{type:'text' as const,text:JSON.stringify({status:request.status,http_status:request.http_status,duration_ms:request.duration_ms,attempts:request.attempts_count,error:request.error_message||undefined})}]};
   });
 
   server.registerTool('list_recent_requests', {
@@ -169,7 +169,7 @@ export const createMcpServer = (authInfo?: any) => {
     annotations: MCP_ANNOTATIONS.list_recent_requests
   }, async ({limit})=>{
     const user=await authenticatedUser(authInfo); const requests=await db.getRequestsByUserId(user.id,limit);
-    return {content:[{type:'text',text:JSON.stringify(requests.map(r=>({status:r.status,http_status:r.http_status,duration_ms:r.duration_ms,endpoint_domain:r.endpoint_domain,created_at:r.created_at,request_id:r.id}))) } ]};
+    return {content:[{type:'text' as const,text:JSON.stringify(requests.map(r=>({status:r.status,http_status:r.http_status,duration_ms:r.duration_ms,endpoint_domain:r.endpoint_domain,created_at:r.created_at,request_id:r.id}))) } ]};
   });
 
   return server;
