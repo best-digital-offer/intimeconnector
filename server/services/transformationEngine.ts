@@ -209,10 +209,8 @@ export function applyTemplateInterpolation(
 ): unknown {
   let rendered = templateString;
   for (const [key, val] of Object.entries(variables)) {
-    const escapedKey = key.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\    const escapedKey = key.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');');
-    const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'g');');
-    const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'g');
-    rendered = rendered.replace(regex, typeof val === 'object' ? JSON.stringify(val) : String(val ?? ''));
+    const replacement = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '');
+    rendered = rendered.split('{{' + key + '}}').join(replacement);
   }
 
   try {
