@@ -24,6 +24,8 @@ export class BillingEngine {
     if (!profile) throw new Error('Account not found.');
 
     const client = stripe();
+    const appBase = process.env.APP_BASE_URL;
+    if (!appBase) throw new Error('Application URL is not configured for billing.');
     let sub = await db.getSubscriptionByUserId(userId);
     let customerId = sub?.provider_customer_id;
 
@@ -40,8 +42,8 @@ export class BillingEngine {
       mode: 'subscription',
       customer: customerId,
       line_items: [{ price: plan.stripe_price_id, quantity: 1 }],
-      success_url: `${process.env.APP_BASE_URL}/app/billing?checkout=success`,
-      cancel_url: `${process.env.APP_BASE_URL}/app/billing?checkout=cancelled`,
+      success_url: `${appBase}/app/billing?checkout=success`,
+      cancel_url: `${appBase}/app/billing?checkout=cancelled`,
       client_reference_id: userId,
       metadata: { user_id: userId, plan_id: planId },
       subscription_data: { metadata: { user_id: userId, plan_id: planId } }
